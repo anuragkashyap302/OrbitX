@@ -2,6 +2,8 @@ import { Inngest } from "inngest";
 import User from "../models/User.js";
 import Connection from "../models/Connection.js";
 import sendEmail from "../configs/nodemailer.js";
+import Story from "../models/Story.js";
+import Message from "../models/Message.js";
 
 // Create a client to send and receive events
 export const inngest = new Inngest({ id: "pingup-apps" });
@@ -98,5 +100,49 @@ export const inngest = new Inngest({ id: "pingup-apps" });
             }
 
       )
+
+      // iggest fujnction to delete function story after 24 hours of creation
+  const deleteStory = inngest.createFunction(
+      {id: 'story-delete'},
+      {event: 'app/story.delete'},
+      async ({event , step})=>{
+         const {storyId} = event.data;
+           const in24Hours = new Date(Date.now() +24 * 60 * 60 * 1000);
+           await step.sleepUntil( "wait-for-24-hours" ,in24Hours);
+           await step.run('delete-story' , async()=>{
+              await Story.findByIdAndDelete(storyId);
+              return {message:"Story deleted "}
+           })
+             
+      }
+
+  )
+
+const sendNotificationofUnseenMessages = inngest.createFunction(
+      {id: 'send-unseen-messages-notification'},
+      {cron : 'TZ=America/New_York 0 9 * * *' }, // every day at 9 AM EST
+      async ({step})=>{
+         const messages = await Message.find({seen:false}).populate('to_user_id');
+         const unseencount = {};
+          messages.map(message => {
+           unseencount[message.to_user_id._id] = (unseencount[message.to_user_id._id] || 0) + 1;
+          });
+          for(const userId in object){
+            const user  = await User.findById(userId);
+            const subject = 'You have unseen messages on PingUp';
+            const body = `
+            <h1>You have ${unseencount[userId]} unseen messages!</h1>
+            <p>Log in to your PingUp account to read your messages.</p>
+            `;
+            await sendEmail({
+               to: user.email,
+               subject,
+               body
+            })
+      }
+        return {message:"Unseen message notifications sent"};
+   }
+)
+
 // Create an empty array where we'll export future Inngest functions
-export const functions = [syncUserCreation , syncUserUpdation , syncUserDeletion , sendNewConnectionRequestReminder];
+export const functions = [syncUserCreation , syncUserUpdation , syncUserDeletion , sendNewConnectionRequestReminder, deleteStory, sendNotificationofUnseenMessages];
