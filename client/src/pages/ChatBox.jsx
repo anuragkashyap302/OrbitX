@@ -1,21 +1,75 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { dummyMessagesData, dummyUserData } from '../assets/assets'
 import { ImageIcon, SendHorizonal } from 'lucide-react';
-
+import { useDispatch, useSelector } from 'react-redux';
+import { useParams } from 'react-router-dom';
+import api from '../api/axios';
+import { addMessages, fetchMessages, resetMessages } from '../features/messages/messagesSlice';
+import {toast} from 'react-hot-toast'
+import { useAuth } from '@clerk/clerk-react'
 const ChatBox = () => {
 
-  const messages = dummyMessagesData;
+  const {messages} = useSelector((state)=> state.messages);
+   const {userId} = useParams()
+    const {getToken} = useAuth()
+     const dispatch = useDispatch()
+
   const [text , setText] = useState('')
   const [image , setImage] = useState(null)
-  const [user , setUser] = useState(dummyUserData)
+  const [user , setUser] = useState(null)
   const messagesEndRef = useRef(null)
-   const sendMessage = async() =>{
 
+   const connections = useSelector((state) => state.connections.connections)
+
+   const fetchUserMessages = async () => {
+       try {
+         const  token = await getToken()
+          dispatch(fetchMessages({token , userId}))
+       } catch (error) {
+         toast.error(error.message)
+       }
    }
+   const sendMessage = async() =>{
+          try {
+            if(!text && !image) return
+            const token = await getToken()
+            const formData = new FormData()
+            formData.append('to_user_id' , userId)
+            formData.append('text' , text)
+             image && formData.append('image' , image);
+             const {data} = await api.post('/api/message/send' , formData ,{
+               headers : {Authorization: `Bearer ${token}`}
+             })
+              if(data.success){
+                setText('')
+                setImage(null)
+                dispatch(addMessages(data.message))
+              }else{
+                throw new Error(data.message)
+              }
+          } catch (error) {
+             toast.error(error.message)
+          }
+   }
+   useEffect(()=>{
+      fetchUserMessages()
+      return () =>{
+          dispatch(resetMessages())
+      }
+    }, [userId])
+
+     useEffect(()=>{
+       if(connections.length > 0){
+  const user = connections.find(connection => connection._id === userId)
+   setUser(user)
+} 
+},[connections , userId])
+
     useEffect(()=>{
-      messagesEndRef.current?.scrollIntoView({behaviour: "smooth"})
+      messagesEndRef.current?.scrollIntoView({behavior: "smooth"})
     }, [messages])
-  return (
+ // yaad rakhao boss ye conditin lagana jaurai kyki fist ender me user null hai kyki setUser is null 1 hour barbed boss 
+  return user && (
     <div className='flex flex-col h-screen'>
        <div className='flex items-center gap-2 p-2 md:px-10 xl:pl-42 bg-gradient-to-r from-indigo-50 to bg-purple-50 border-b border-gray-300'>
          <img src= {user.profile_picture} className='size-8 rounded-full' alt="" />

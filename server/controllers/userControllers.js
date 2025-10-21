@@ -110,9 +110,9 @@ export const updateUserData = async (req, res) => {
 
  export const followUser = async (req, res) => {
       try {
-         const {useId} = req.auth();
+         const {userId} = req.auth();
          const {id}  = req.body;
-          const user = await User.findById(useId);
+          const user = await User.findById(userId);
            if(user.following.includes(id)){
               return res.json({success:false , message:"You are already following this user"});
            }
@@ -121,7 +121,7 @@ export const updateUserData = async (req, res) => {
             await user.save();
  // jisko floow kiya jukse folowing me apna id add krna hai
             const toUser = await User.findById(id);
-             toUser.followers.push(useId);
+             toUser.followers.push(userId);
              await toUser.save();
             res.json({success:true , message:" Now  You are Following This User"});
           
@@ -135,14 +135,14 @@ export const updateUserData = async (req, res) => {
  // unfolw user
  export const unfollowUser = async (req, res) => {
       try {
-         const {useId} = req.auth();
+         const {userId} = req.auth();
          const {id}  = req.body;
-          const user = await User.findById(useId);
+          const user = await User.findById(userId);
             user.following = user.following.filter((user) => user !== id);
             await user.save();
 
-             const toUser = await User.findById(useId);
-                toUser.followers = toUser.followers.filter((user) => user !== useId);
+             const toUser = await User.findById(userId);
+                toUser.followers = toUser.followers.filter((user) => user !== userId);
                 await toUser.save();
            
             res.json({success:true , message:"You are no longer following This User"});
@@ -156,7 +156,7 @@ export const updateUserData = async (req, res) => {
 //   send connection request
    export const sendConnectionRequest = async (req, res) => {
        try {
-          const {userId} = req.auth();
+          const {userId} = req.auth(); // splling pe dhayan do beta 
           const {id} = req.body;
           // chek if user has sent more than 20 req in 24 hours
            const last24Hours = new Date(Date.now() - 24*60*60*1000);
@@ -197,13 +197,15 @@ export const updateUserData = async (req, res) => {
    export const getUserConnections = async (req, res) => {
        try {
             const {userId} = req.auth();
-            const user = await User.findById(userId).populate('connections followers following');
+            const user = await User.findById(userId).populate('connections followers following'); // yaha last me space tha ek wo ek ghata kharab kiya na monogo me space populate nahi haota hai last me dhayn de beta soch smajh 
              const connections = user.connections;
               const followers = user.followers;
                const following = user.following;
                const pendingConnections = (await Connection.find({to_user_id:userId , status:'pending'}).populate('from_user_id')).map(connection => connection.from_user_id);
-
+                  
+                  
             res.json({success:true , connections , followers , following , pendingConnections});
+            
        } catch (error) {
             console.log(error);
             res.json({success:false , message:error.message});
