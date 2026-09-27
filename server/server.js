@@ -36,6 +36,7 @@ app.use(helmet({
  */
 const allowedOrigins = [
   process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000'
@@ -43,10 +44,11 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Mobile apps, server-to-server calls, whitelisted origins, ya Vercel domains (*.vercel.app) allow karo
+    // Mobile apps, server-to-server calls, whitelisted origins, Vercel domains, ya anuragkr.me subdomains allow karo
     const isVercelDeployment = origin && (origin.endsWith('.vercel.app') || origin.includes('vercel.app'));
+    const isCustomDomain = origin && (origin.endsWith('.anuragkr.me') || origin === 'https://anuragkr.me');
 
-    if (!origin || allowedOrigins.includes(origin) || isVercelDeployment) {
+    if (!origin || allowedOrigins.includes(origin) || isVercelDeployment || isCustomDomain) {
       callback(null, true);
     } else {
       callback(new AppError('CORS block: Request origin not allowed', 403));
