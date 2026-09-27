@@ -11,8 +11,8 @@ const Sidebar = ({sidebarOpen , setSidebarOpen}) => {
     const {signOut} = useClerk()
   return (
     <div className={`w-60 xl:w-72 bg-white border-r border-gray-200 flex flex-col justify-between items-center max-sm:absolute top-0 bottom-0 z-20 ${sidebarOpen ? 'translate-x-0': 'max-sm:-translate-x-full'} transition-all duration-300 ease-in-out`}>
-     <div className='w-full'>
-  <img onClick={() => navigate('/')} src={assets.logo}  alt="" className='w-26 ml-7 my-2 cursor-pointer' />
+      <div className='w-full'>
+        <img onClick={() => navigate('/')} src={assets.logo} alt="OrbitX" className='w-32 ml-6 my-2.5 cursor-pointer object-contain transition-transform hover:scale-105 duration-200' />
       <hr className='border-gray-300 mb-8' />
       <MenuItems setSidebarOpen={setSidebarOpen}/>
       <Link to= '/create-post' className='flex items-center justify-center gap-2 py-2.5 mt-6 mx-6 rounded-lg bg-gradient-to-r from-indigo-500 

@@ -83,76 +83,107 @@ export const updateUserData = async (req, res) => {
      }
 }
 
-//  find user uing usermae , logcation or email
- export const discoverUsers = async (req, res) => {
-      try {
-         const {useId} = req.auth();
-         const {input}  = req.body;
-          const allUsers = await User.find(
-            {
-              $or:[
-                 {username: new RegExp(input, 'i')},
-                   {email: new RegExp(input, 'i')},
-                   {full_name: new RegExp(input, 'i')},
-                 {location: new RegExp(input, 'i')},
-               
+/**
+ * 💡 [Hinglish Explanation]:
+ * Search / Discover endpoint jo username, full name, location ya email se matching users find karta hai.
+ * [Bug Fix #4]: Pehle yahan const {useId} = req.auth() likha tha (typo). useId undefined tha,
+ * isliye filter(user => user._id !== useId) fail hota tha aur search me khud ka user profile bhi show hota tha.
+ * Saath hi pehle User.find() se saare users memory me load ho rahe the.
+ * Ab database level par hi {_id: { $ne: userId }} filter aur .limit(25) lagaya hai jo production-fast hai.
+ */
+export const discoverUsers = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const { input } = req.body;
 
-              ]
-          }   
-        )
-           const filteredUsers = allUsers.filter(user => user._id !== useId);
-            res.json({success:true , users:filteredUsers});
-      } catch (error) {
-         console.log(error);
-            res.json({success:false , message:error.message});
-      }
- }
+    const query = {
+      _id: { $ne: userId } // Current user ko discover suggestions se exclude karo
+    };
 
- export const followUser = async (req, res) => {
-      try {
-         const {userId} = req.auth();
-         const {id}  = req.body;
-          const user = await User.findById(userId);
-           if(user.following.includes(id)){
-              return res.json({success:false , message:"You are already following this user"});
-           }
+    if (input && input.trim()) {
+      const regex = new RegExp(input.trim(), 'i');
+      query.$or = [
+        { username: regex },
+        { email: regex },
+        { full_name: regex },
+        { location: regex }
+      ];
+    }
 
-            user.following.push(id);
-            await user.save();
- // jisko floow kiya jukse folowing me apna id add krna hai
-            const toUser = await User.findById(id);
-             toUser.followers.push(userId);
-             await toUser.save();
-            res.json({success:true , message:" Now  You are Following This User"});
-          
-           
-      } catch (error) {
-         console.log(error);
-            res.json({success:false , message:error.message});
-      }
- }
+    const filteredUsers = await User.find(query).limit(30).select('-__v');
+    res.json({ success: true, users: filteredUsers });
+  } catch (error) {
+    console.error("DiscoverUsers Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
 
- // unfolw user
- export const unfollowUser = async (req, res) => {
-      try {
-         const {userId} = req.auth();
-         const {id}  = req.body;
-          const user = await User.findById(userId);
-            user.following = user.following.filter((user) => user !== id);
-            await user.save();
+/**
+ * 💡 [Hinglish Explanation]:
+ * User ko follow karne ka controller:
+ * 1. Current user ke 'following' array me target user (id) add karo.
+ * 2. Target user ke 'followers' array me current user (userId) add karo.
+ * $addToSet use kiya hai taaki duplicate entries na ho sakein.
+ */
+export const followUser = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const { id } = req.body;
 
-             const toUser = await User.findById(userId);
-                toUser.followers = toUser.followers.filter((user) => user !== userId);
-                await toUser.save();
-           
-            res.json({success:true , message:"You are no longer following This User"});
-          
-           
-      } catch (error) {
-         console.log(error);
-            res.json({success:false , message:error.message});
-      }
- }
+    if (userId === id) {
+      return res.status(400).json({ success: false, message: "You cannot follow yourself" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.following.includes(id)) {
+      return res.json({ success: false, message: "You are already following this user" });
+    }
+
+    // Atomic updates for both users to prevent race conditions
+    await User.findByIdAndUpdate(userId, { $addToSet: { following: id } });
+    await User.findByIdAndUpdate(id, { $addToSet: { followers: userId } });
+
+    res.json({ success: true, message: "Now you are following this user" });
+  } catch (error) {
+    console.error("FollowUser Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ 
+ * User ko unfollow karne ka controller:
+ * [Bug Fix #3]: Pehle yahan 'const toUser = await User.findById(userId)' likha tha (galti se target id ki jagah userId).
+ * Isse current user ka hi follower array modify ho raha tha aur target user ke followers se kuch delete nahi ho raha tha.
+ * Ab atomic $pull ke through:
+ * 1. Current user (userId) ke 'following' list se target 'id' ko remove kiya hai.
+ * 2. Target user ('id') ke 'followers' list se current 'userId' ko remove kiya hai.
+ */
+export const unfollowUser = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const { id } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: "Target user ID is required" });
+    }
+
+    // 1. Current user ki following list se target id hatao
+    await User.findByIdAndUpdate(userId, { $pull: { following: id } });
+
+    // 2. Target user ki followers list se current userId hatao (Bug Fix: pehle yahan userId se find ho raha tha)
+    await User.findByIdAndUpdate(id, { $pull: { followers: userId } });
+
+    res.json({ success: true, message: "You are no longer following this user" });
+  } catch (error) {
+    console.error("UnfollowUser Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
 //   send connection request
    export const sendConnectionRequest = async (req, res) => {
        try {

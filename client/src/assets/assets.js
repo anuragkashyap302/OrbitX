@@ -1,4 +1,5 @@
 import logo from './logo.svg'
+import logo_icon from './logo.png'
 import sample_cover from './sample_cover.jpg'
 import sample_profile from './sample_profile.jpg'
 import bgImage from './bgImage.png'
@@ -8,6 +9,7 @@ import sponsored_img from './sponsored_img.png'
 
 export const assets = {
     logo,
+    logo_icon,
     sample_cover,
     sample_profile,
     bgImage,

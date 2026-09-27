@@ -16,28 +16,52 @@ const Discover = () => {
   const [ users , setUsers] = useState([])
   const [loading , setLoading] = useState(false)
    const {getToken} = useAuth()
-  const handleSearch = async(e)=>{
-     if(e.key === 'Enter'){
-       try {
-        setUsers([])
-        setLoading(true)
-         const {data} = await api.post('/api/user/discover' , {input} , {
-                headers:{ Authorization: `Bearer ${await getToken()}`}
-              })
-               data.success ? setUsers(data.users) : toast.error(data.message)
-               setLoading(false)
-               setInput('')
-       } catch (error) {
-          toast.error(error.message)
-       }
-        setLoading(false)
-     }
-  }
-   useEffect(() =>{
-     getToken().then((token)=>{
-       dispatch(fetchUser(token))
-     })
-   })
+  /**
+   *
+   * Discover page par users ko search karne ka function.
+   * Agar query blank ho to default recommendations load karta hai.
+   */
+  const fetchDiscoverUsers = async (searchQuery = '') => {
+    try {
+      setLoading(true);
+      const token = await getToken();
+      if (!token) return;
+      const { data } = await api.post('/api/user/discover', { input: searchQuery }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (data.success) {
+        setUsers(data.users);
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async (e) => {
+    if (e.key === 'Enter') {
+      fetchDiscoverUsers(input);
+    }
+  };
+
+  /**
+   *
+   * [Bug Fix #7 - Infinite Re-render Loop]:
+   * Pehle yahan 'useEffect' bina dependency array ke likha tha!
+   * Har render ke baad dispatch(fetchUser) chalta tha, Redux state update hoti thi, component re-render hota tha,
+   * aur ye cycle infinite loop me fast-forward ho jati thi jisse browser tab hang aur CPU 100% ho jata tha.
+   * Ab humne empty dependency array [] provide kiya hai taaki ye sirf initial mount par ek baar execute ho.
+   */
+  useEffect(() => {
+    getToken().then((token) => {
+      if (token) dispatch(fetchUser(token));
+    });
+    // Initial suggested users load karo taaki page blank na dikhe
+    fetchDiscoverUsers('');
+  }, []);
   return (
     <div className='min-h-screen bg-gradient-to-b from-slate-50 to-white'>
       <div className='max-w-6xl mx-auto p-6'>

@@ -29,12 +29,17 @@ export const addUserStory = async (req, res) => {
             media_type,
             background_color
           })
-           // schedule story deletion after 24 hours using inngest
+           /**
+    
+            * Story banne ke baad Inngest background event emit kiya jata hai.
+            * [Bug Fix #2]: Pehle yahan 'app/story-delete' (hyphen) bheja ja raha tha jabki Inngest listener 'app/story.delete' (dot) expect kar raha tha.
+            * Is mismatch ki wajah se stories 24 ghante baad auto-delete nahi ho pa rahi thi. Ab match kar diya gaya hai.
+            */
            await inngest.send({
-             name: 'app/story-delete',
+             name: 'app/story.delete',
              data: {storyId: story._id}
-           })
-            res.json({success:true});
+           });
+           res.status(201).json({success: true, story, message: "Story added successfully"});
      } catch (error) {
          console.log(error);
          res.json({success:false , message:error.message});

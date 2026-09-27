@@ -4,27 +4,41 @@ import Message from '../models/Message.js';
 // create an empty object to store ss event connections
 const connections = {};
 
-// controller fucntion sse endpoint
+/**
+ * 
+ * Server-Sent Events (SSE) endpoint jo client ko real-time message stream provide karta hai.
+ * [Bug Fix #8 & Security Hardening]:
+ * 1. Pehle bina kisi validation ke koi bhi invalid request open connection bana leti thi.
+ * 2. Ab check lagaya hai ki userId exist karti ho aur valid string ho.
+ * 3. Connection keep-alive headers aur proper client disconnect cleanup ensure kiya gaya hai.
+ * Note: Phase 3 me hum is unidirectional SSE ko fully-authenticated bi-directional Socket.IO se upgrade karenge.
+ */
 export const sseController = (req, res) => {
-    const {userId} = req.params;
-    console.log('New Client Connected' , userId);
+    const { userId } = req.params;
 
-    // set sse haeders
-    res.setHeader('Content-Type' , 'text/event-stream');
-    res.setHeader('Cache-Control' , 'no-cache');
-    res.setHeader('Connection' , 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin' , '*');
+    if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+        return res.status(400).json({ success: false, message: "Valid userId parameter is required" });
+    }
 
-    // add the client respionst object to connectiosn object
+    console.log('SSE Client Connected:', userId);
+
+    // Set standard SSE streaming headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable Nginx proxy buffering
+
+    // Client response object ko active connections me map karo
     connections[userId] = res;
-    // send ntila event to clinet
-    res.write('log: Connected to SSE stream\n\n' );
-    // handle client disconnect
-    req.on('close' , ()=>{
+
+    // Initial handshake ping
+    res.write('event: connected\ndata: {"status": "connected", "userId": "' + userId + '"}\n\n');
+
+    // Handle client disconnect / network drop
+    req.on('close', () => {
         delete connections[userId];
-        console.log('Client Disconnected');
-    })
-    
+        console.log('SSE Client Disconnected:', userId);
+    });
 }
 
 // send message

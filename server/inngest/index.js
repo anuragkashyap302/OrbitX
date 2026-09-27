@@ -83,12 +83,12 @@ export const inngest = new Inngest({ id: "pingup-apps" });
                   if(connection.status === 'accepted'){
                       return {message:"Connection already accepted"};
                   }
-                   const subject = 'New Connection Request on PingUp';
+                   const subject = 'New Connection Request on OrbitX';
                   const body = `
                   <h1>You have a new connection request!</h1>
                   <p><strong>${connection.from_user_id.full_name} (@${connection.from_user_id.username})</strong> has sent you a connection request.</p>
 
-                  <p>Log in to your PingUp account to accept or decline the request.</p>
+                  <p>Log in to your OrbitX account to accept or decline the request.</p>
                   `;
                  await sendEmail({
                   to: connection.to_user_id.email,
@@ -101,47 +101,69 @@ export const inngest = new Inngest({ id: "pingup-apps" });
 
       )
 
-      // iggest fujnction to delete function story after 24 hours of creation
+       /**
+        * 💡 [Hinglish Explanation]:
+        * Inngest background function jo 24 ghante baad user ki story ko automatically database se delete karta hai.
+        * Event name 'app/story.delete' controller se match hona compulsory hai taaki listener sahi se trigger ho.
+        */
   const deleteStory = inngest.createFunction(
       {id: 'story-delete'},
       {event: 'app/story.delete'},
       async ({event , step})=>{
          const {storyId} = event.data;
-           const in24Hours = new Date(Date.now() +24 * 60 * 60 * 1000);
-           await step.sleepUntil( "wait-for-24-hours" ,in24Hours);
-           await step.run('delete-story' , async()=>{
+           const in24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000);
+           // 24 ghante ke liye job ko pause rakho bina server memory block kiye
+           await step.sleepUntil("wait-for-24-hours", in24Hours);
+           await step.run('delete-story', async()=>{
               await Story.findByIdAndDelete(storyId);
-              return {message:"Story deleted "}
+              return {message: "Story deleted successfully after 24h"}
            })
-             
       }
-
   )
 
+/**
+ * 
+ * Ye cron job har roz subah 9 AM EST par chalta hai aur jinke unread messages hain unhe email bhejta hai.
+ * [Bug Fix #1]: Pehle yahan 'for(const userId in object)' likha tha, jisse runtime pe ReferenceError throw hota tha.
+ * Ab 'unseencount' ke keys par loop chalaya hai aur check kiya hai ki user database me exist karta hai ya nahi.
+ */
 const sendNotificationofUnseenMessages = inngest.createFunction(
       {id: 'send-unseen-messages-notification'},
       {cron : 'TZ=America/New_York 0 9 * * *' }, // every day at 9 AM EST
       async ({step})=>{
-         const messages = await Message.find({seen:false}).populate('to_user_id');
+         // 1. Unseen messages fetch karo recipient user details ke sath
+         const messages = await Message.find({seen: false}).populate('to_user_id');
          const unseencount = {};
-          messages.map(message => {
-           unseencount[message.to_user_id._id] = (unseencount[message.to_user_id._id] || 0) + 1;
-          });
-          for(const userId in object){
-            const user  = await User.findById(userId);
-            const subject = 'You have unseen messages on PingUp';
+         
+         // 2. Har user ke kitne unread messages hain count accumulate karo
+         messages.forEach(message => {
+            if (message.to_user_id && message.to_user_id._id) {
+               const id = message.to_user_id._id.toString();
+               unseencount[id] = (unseencount[id] || 0) + 1;
+            }
+         });
+
+         // 3. Har user ko loop karke notification email bhejo
+         for (const userId of Object.keys(unseencount)) {
+            const user = await User.findById(userId);
+            // Edge Case: Agar user ne account delete kar diya ho to skip karo
+            if (!user || !user.email) continue;
+
+            const count = unseencount[userId];
+            const subject = `You have ${count} unseen message${count > 1 ? 's' : ''} on OrbitX`;
             const body = `
-            <h1>You have ${unseencount[userId]} unseen messages!</h1>
-            <p>Log in to your PingUp account to read your messages.</p>
+            <h1>You have ${count} unseen messages on OrbitX!</h1>
+            <p>Hi ${user.full_name || user.username}, don't keep your connections waiting.</p>
+            <p>Log in to your OrbitX account to read your messages.</p>
             `;
             await sendEmail({
                to: user.email,
                subject,
                body
-            })
+            });
+         }
+         return {message: "Unseen message notifications sent successfully"};
       }
-        return {message:"Unseen message notifications sent"};
-   }
 )
 
 // Create an empty array where we'll export future Inngest functions

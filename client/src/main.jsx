@@ -12,12 +12,25 @@ if (!PUBLISHABLE_KEY) {
   throw new Error('Missing Publishable Key')
 }
 createRoot(document.getElementById('root')).render(
- <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
-       <BrowserRouter>
-       <Provider store={store}>
-          <App />
-       </Provider>
-       
-       </BrowserRouter>
-      </ClerkProvider>
+  <ClerkProvider 
+    publishableKey={PUBLISHABLE_KEY}
+    localization={{
+      signIn: {
+        start: {
+          title: "Sign in to OrbitX",
+        }
+      },
+      signUp: {
+        start: {
+          title: "Create your OrbitX account",
+        }
+      }
+    }}
+  >
+    <BrowserRouter>
+      <Provider store={store}>
+        <App />
+      </Provider>
+    </BrowserRouter>
+  </ClerkProvider>
 )
